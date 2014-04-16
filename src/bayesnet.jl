@@ -40,6 +40,15 @@ function make_vertex(g::AdjacencyList{Node}, x)
 end
 vertex_index(n::Node) = n.index
 
+function adjmat(bn::BayesNet)
+    n = length(bn.vertices)
+    mat = zeros(n,n)
+    for i in 1:n, neigbor=bn.adjlist[i]
+        mat[i,vertex_index(neighbor)] = 1
+    end
+    mat
+end
+
 type BayesNetDAI
     bn::BayesNet
     fg::FactorGraph
@@ -92,15 +101,107 @@ function show(io::IO, bnd::BayesNetDAI)
 end
 
 type BayesNetSampler
-    bn::BayesNetDAI
+    bnd::BayesNetDAI
     data::Matrix{Int}
+    p_cpds::Float64
     cpds
+    p_structural::Float64
     template
+    limparent::Int
+    changelist::Vector{Int}
+    x::Vector{Int} # node ordering/mapping
+    fvalue::Vector{Float64}
+    logqfactor::Float64
 end
 
-#propose
-#energy
-#reject
+BayesNetSampler(n::Int, data::Matrix{Int}) = BayesNetSampler(
+    BayesnetDAI(n),
+    data,
+    0.2,
+    [],
+    0.2,
+    BayesNet(n),
+    4,
+    [1:n],
+    shuffle([1:n]),
+    zeros(Float64, n),
+    0.0)
+
+function factor_klds(bnd1::BayesNetDAI, bnd2::BayesNetDAI)
+    0
+end
+
+function energy(bns::BayesNetSampler)
+    # energy contribution from structural
+    adj_diff = sum(abs(adjmat(bns.bnd.bn) - adjmat(bns.template)))
+    e_struct = bns.p_structural * adj_diff
+
+    # energy contribution from cpds
+    cpd_diff = factor_klds(bns.bnd, bns.cpds)
+    e_cpd = bns.p_cpds * cpd_diff
+
+    ##### energy from data (likelihood) ####
+    accum = 0.0
+
+    #limit number of parents
+    if bns.bnd.bn.nedges > bns.limparent
+        return 1e20
+    end
+
+    counts = {}
+    for c in bns.changelist
+        node = bns.x[c]
+        push!(counts, zeros(Int,nrStates(bns.fg[node])))
+    end
+
+    allvars = VarSet([x.var for x=bnd.bn.vertices]...)
+    for i=1:length(counts)
+        node = bns.x[bns.changelist[i]]
+        fac = bns.bnd.fg[node]
+        facvs = vars(fac)
+        inds = labels(fac)
+        # TODO check indexing above, do
+        # I need to pass inds through bns.x again?
+        for row=size(bns.data,1)
+            index = calcLinearState(facvs, bns.data[inds]) 
+            counts[node][index] += 1
+        end
+    end
+
+    for i=1:length(counts)
+        node = bns.x[bns.changelist[i]]
+        v = bns.bnd.bn.vertices[i].var
+        arity = states(v)
+        fac = bns.bnd.fg[node]
+        pars = vars(fac) - v
+        numparstates = nrStates(pars)
+        for parstate in 1:numparstates, state in 1:arity
+            index = conditionalState(v, pars, state, parstate)
+            accum += log(fac[index]) * counts[i][index]
+        end
+        bns.fvalue[node] = -accum
+    end
+    return sum(bns.fvalue) - bns.logqfactor # TODO - or + logqfactor here?
+end
+
+function propose(bns::BayesNetSampler)
+    bns.bnd.dirty = true
+    clearBackups!(bns.bnd.fg)
+
+    bns.logqfactor = 0.0
+    numnodes = length(bns.bnd.bn.vertices)
+    scheme = rand(1:3)
+
+    if scheme==1 # Temporal order change
+        k = rand(1:numnodes)
+        #push!(get!(addlist, node, []), something)
+        #push!(get!(addlist, node, []), something)
+end
+
+function reject(bns::BayesNetSampler)
+    bns.bnd.dirty = true
+    restoreFactors!(bns.bnd.fg)
+end
 
 function check_cpds(bnd::BayesNetDAI)
     for i=1:numFactors(bnd.fg)
