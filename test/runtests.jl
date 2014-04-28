@@ -6,13 +6,16 @@ bnd = MCBN.BayesNetDAI(5)
 bnd2 = MCBN.BayesNetDAI(5)
 bnd3 = MCBN.BayesNetDAI(5)
 
+##################################################
+# Entropy and KLD Tests
+##################################################
 
 @test_approx_eq MCBN.entropy(bnd) 5.0
 @test_approx_eq MCBN.naive_entropy(bnd) 5.0
 @test_approx_eq MCBN.kld(bnd,bnd2) 0.0
 
 function test_net(bnd)
-    MCBN.check_cpds(bnd)
+    MCBN.check_bnd(bnd)
     @test_approx_eq MCBN.naive_entropy(bnd) MCBN.entropy(bnd)
     @test_approx_eq MCBN.kld(bnd,bnd) 0.0
 end
@@ -28,11 +31,11 @@ test_net(bnd)
 test_kld(bnd, bnd2)
 
 MCBN.add_edge!(bnd3, 1,2)
-#MCBN.check_cpds(bnd3)
+#MCBN.check_bnd(bnd3)
 
 MCBN.set_factor!(bnd3, 2, [1.0, 0.5, 0.0, 0.5])
 MCBN.set_factor!(bnd3, 1, [0.8, 0.2])
-MCBN.check_cpds(bnd3)
+MCBN.check_bnd(bnd3)
 
 @test_approx_eq MCBN.entropy(bnd3) 3.9219280948873623
 @test_approx_eq MCBN.entropy(bnd3) MCBN.naive_entropy(bnd3)
@@ -50,6 +53,21 @@ bnd3.dirty = true
 
 test_net(bnd3)
 test_kld(bnd, bnd3)
+
+##################################################
+# Entropy and KLD Tests
+##################################################
+
+bns = MCBN.BayesNetSampler(3, rand(1:2, 5,3))
+@show MCBN.energy(bns)
+
+for i=1:30
+    MCBN.propose(bns)
+end
+#MCBN.reject(bns)
+#MCBN.propose(bns)
+#MCBN.reject(bns)
+
 
     #empty = BayesNetCPD(np.array([2,2,2]))
     #assert empty.entropy() == 3.0
