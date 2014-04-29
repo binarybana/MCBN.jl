@@ -58,11 +58,16 @@ test_kld(bnd, bnd3)
 # Entropy and KLD Tests
 ##################################################
 
-bns = MCBN.BayesNetSampler(3, rand(1:2, 5,3))
+bns = MCBN.BayesNetSampler(3, rand(1:2, 0,3))
 @show MCBN.energy(bns)
+@show bns.fvalue
 
-for i=1:30
-    MCBN.propose(bns)
+for i=1:10
+    s = MCBN.propose(bns)
+    MCBN.reject(bns)
+    E = MCBN.energy(bns)
+    #@show bns.fvalue
+    @show E
 end
 #MCBN.reject(bns)
 #MCBN.propose(bns)

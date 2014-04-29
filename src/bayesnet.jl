@@ -26,9 +26,7 @@ end
 function del_edge!(bn::BayesNet, un::Node, vn::Node)
     u = vertex_index(un)
     v = vertex_index(vn)
-    ind = findfirst(bn.adjlist[u], v)
-    @show u, ind
-    @show bn.adjlist[u]
+    ind = findfirst(bn.adjlist[u], vn)
     deleteat!(bn.adjlist[u], ind)
     bn.nedges -= 1
 end
@@ -82,7 +80,11 @@ function add_edge!(bnd::BayesNetDAI, u::Int, v::Int)
     un,vn = bnd.bn.vertices[[u,v]]
     vnfac = bnd.fg[v]
     bnd.dirty=true
+    assert(!(un.var in vars(vnfac)))
+    assert(0 == findfirst(bnd.bn.adjlist[v], un))
     bnd.fg[v] = embed(vnfac, vars(vnfac)+un.var)
+    @show un, vn
+    @show bnd.bn.adjlist[v]
     add_edge!(bnd.bn, un, vn)
 end
 
@@ -90,7 +92,22 @@ function del_edge!(bnd::BayesNetDAI, u::Int, v::Int)
     un,vn = bnd.bn.vertices[[u,v]]
     vnfac = bnd.fg[v]
     bnd.dirty=true
-    bnd.fg[v] = marginal(vnfac, vars(vnfac)-un.var)
+
+    fac = bnd.fg[v]
+    newvars = vars(fac)
+    erase!(newvars, un.var) # premature optimization ya!
+    newpars = newvars - vn.var
+    newfac = Factor(newvars)
+
+    for parstate in 1:nrStates(newpars), vs in 1:2 # FIXME: hardcoded binary
+        newval = fac[conditionalState2(vn.var, un.var, newpars, vs, 1, parstate)] +
+            fac[conditionalState2(vn.var, un.var, newpars, vs, 2, parstate)]
+        newfac[conditionalState(vn.var, newpars, 1, parstate)] = newval
+        newfac[conditionalState(vn.var, newpars, 2, parstate)] = 1 - newval
+    end
+    bnd.fg[v] = newfac
+    
+    #bnd.fg[v] = marginal(vnfac, vars(vnfac)-un.var)
     del_edge!(bnd.bn, un, vn)
 end
 
@@ -107,7 +124,7 @@ function move_params!(bnd::BayesNetDAI, node)
     bnd.dirty = true
 
     fac = bnd.fg[node]
-    pars = vars(fac)
+    pars = vars(fac) 
     curr = Var(node,2) # FIXME: hardcoded binary
     erase!(pars, curr)
 
@@ -189,8 +206,8 @@ function BayesNetSampler(n::Int, data::Matrix{Int})
     eye(Bool, n),
     4,
     [1:n],
-    shuffle([1:n]),
-    [1:n],
+    randperm(n),
+    randperm(n),
     zeros(Float64, n),
     zeros(Float64, n),
     0.0,
@@ -220,6 +237,7 @@ function energy(bns::BayesNetSampler)
     for node in bns.changelist
         #limit number of parents
         if length(bns.bnd.bn.adjlist[node]) > bns.limparent
+            @show bns.bnd.bn.adjlist[node]
             return 1e20
         end
         push!(counts, zeros(Int,nrStates(bns.bnd.fg[node])))
@@ -233,13 +251,13 @@ function energy(bns::BayesNetSampler)
         inds = labels(fac)
         for row=1:size(bns.data,1)
             index = calcLinearState(facvs, bns.data[inds]) 
-            counts[node][index] += 1
+            counts[i][index] += 1
         end
     end
 
     for i=1:length(counts) # Calculate likelihood
         node = bns.changelist[i]
-        v = bns.bnd.bn.vertices[i].var
+        v = bns.bnd.bn.vertices[node].var
         arity = states(v)
         fac = bns.bnd.fg[node]
         pars = vars(fac) - v
@@ -320,7 +338,7 @@ function propose(bns::BayesNetSampler)
 
             edgedel = mat[i,j]
             mat[i,j] = !mat[i,j]
-            underparlimit = sum(mat[:,j]) > bns.limparent
+            underparlimit = sum(mat[:,j]) > bns.limparent+1 #+1 for diagonal
             if underparlimit
                 mat[i,j] = !mat[i,j] # reset for another loop
             end
