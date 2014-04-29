@@ -58,21 +58,31 @@ test_kld(bnd, bnd3)
 # Entropy and KLD Tests
 ##################################################
 
-bns = MCBN.BayesNetSampler(3, rand(1:2, 0,3))
-@show MCBN.energy(bns)
-@show bns.fvalue
+bns = MCBN.BayesNetSampler(3, rand(1:2, 5,3))
+origE = MCBN.energy(bns)
+origfvalue = copy(bns.fvalue)
 
-for i=1:10
-    s = MCBN.propose(bns)
+@time for i=1:1000
+    MCBN.propose(bns)
+    MCBN.check_bns(bns)
     MCBN.reject(bns)
+    MCBN.check_bns(bns)
     E = MCBN.energy(bns)
-    #@show bns.fvalue
-    @show E
+    @test_approx_eq bns.fvalue origfvalue
+    @test_approx_eq E origE
 end
-#MCBN.reject(bns)
-#MCBN.propose(bns)
-#MCBN.reject(bns)
 
+@time for i=1:1000
+    s = MCBN.propose(bns)
+    MCBN.check_bns(bns)
+    E1 = MCBN.energy(bns)
+    f1 = copy(bns.fvalue)
+    bns.changelist = [1:3]
+    E2 = MCBN.energy(bns)
+    f2 = copy(bns.fvalue)
+    @test_approx_eq f1 f2
+    @test_approx_eq E1 E2
+end
 
     #empty = BayesNetCPD(np.array([2,2,2]))
     #assert empty.entropy() == 3.0

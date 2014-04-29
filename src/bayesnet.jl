@@ -1,64 +1,7 @@
-export BayesNet, BayesNetSampler
-
-type Node 
-    index::Int
-    label::UTF8String
-    var::Var
-    function Node(i,l,v)
-        assert(i==label(v))
-        new(i,l,v)
-    end
-end
-typealias BayesNet AdjacencyList{Node}
-
-function BayesNet(n::Int)
-    BayesNet(1:n)
-end
-
-function BayesNet(itr)
-    g = adjlist(Node)
-    for n in itr
-        add_vertex!(g,n)
-    end
-    g
-end
-
-function del_edge!(bn::BayesNet, un::Node, vn::Node)
-    u = vertex_index(un)
-    v = vertex_index(vn)
-    ind = findfirst(bn.adjlist[u], vn)
-    deleteat!(bn.adjlist[u], ind)
-    bn.nedges -= 1
-end
-
-function show(io::IO, n::Node)
-    try
-        if int(n.label) == n.index
-            print(io, "$(n.index)")
-        end
-    catch
-        print(io, "$(n.index): $(n.label)")
-    end
-end
-
-function make_vertex(g::BayesNet, x) 
-    ind = num_vertices(g)+1
-    v = Var(ind,2) #FIXME hardcoded binary
-    Node(ind, string(x), v) 
-end
-vertex_index(n::Node) = n.index
-
-function adjmat(bn::BayesNet)
-    n = length(bn.vertices)
-    mat = zeros(Bool,n,n)
-    for i in 1:n, neigbor=bn.adjlist[i]
-        mat[i,vertex_index(neighbor)] = true
-    end
-    mat
-end
+export BayesNetDAI, BayesNetSampler
 
 type BayesNetDAI
-    bn::BayesNet
+    verts::Vector{Var}
     fg::FactorGraph
     jt::JTree
     dirty::Bool
@@ -70,45 +13,40 @@ function BayesNetDAI(n::Int)
     BayesNetDAI(g)
 end
 
-function BayesNetDAI(bn::BayesNet)
-    fg = FactorGraph([Factor(x.var) for x in bn.vertices]...)
+function BayesNetDAI(n::Int)
+    verts = [Var(x,2) for x=1:n] # FIXME hardcoded binary
+    fg = FactorGraph([Factor(x) for x in verts]...)
     jt = JTree(fg)
-    BayesNetDAI(bn, fg, jt, true, -Inf)
+    BayesNetDAI(verts, fg, jt, true, -Inf)
 end
 
 function add_edge!(bnd::BayesNetDAI, u::Int, v::Int)
-    un,vn = bnd.bn.vertices[[u,v]]
+    un,vn = bnd.verts[[u,v]]
     vnfac = bnd.fg[v]
     bnd.dirty=true
-    assert(!(un.var in vars(vnfac)))
-    assert(0 == findfirst(bnd.bn.adjlist[v], un))
-    bnd.fg[v] = embed(vnfac, vars(vnfac)+un.var)
-    @show un, vn
-    @show bnd.bn.adjlist[v]
-    add_edge!(bnd.bn, un, vn)
+    assert(!(un in vars(vnfac)))
+    bnd.fg[v] = embed(vnfac, vars(vnfac)+un)
 end
 
 function del_edge!(bnd::BayesNetDAI, u::Int, v::Int)
-    un,vn = bnd.bn.vertices[[u,v]]
+    un,vn = bnd.verts[[u,v]]
     vnfac = bnd.fg[v]
     bnd.dirty=true
 
     fac = bnd.fg[v]
     newvars = vars(fac)
-    erase!(newvars, un.var) # premature optimization ya!
-    newpars = newvars - vn.var
+    erase!(newvars, un) # premature optimization ya!
+    newpars = newvars - vn
     newfac = Factor(newvars)
 
     for parstate in 1:nrStates(newpars), vs in 1:2 # FIXME: hardcoded binary
-        newval = fac[conditionalState2(vn.var, un.var, newpars, vs, 1, parstate)] +
-            fac[conditionalState2(vn.var, un.var, newpars, vs, 2, parstate)]
-        newfac[conditionalState(vn.var, newpars, 1, parstate)] = newval
-        newfac[conditionalState(vn.var, newpars, 2, parstate)] = 1 - newval
+        newval = (fac[conditionalState2(vn, un, newpars, vs, 1, parstate)] +
+            fac[conditionalState2(vn, un, newpars, vs, 2, parstate)])/2
+        newfac[conditionalState(vn, newpars, 1, parstate)] = newval
+        newfac[conditionalState(vn, newpars, 2, parstate)] = 1 - newval
     end
     bnd.fg[v] = newfac
-    
-    #bnd.fg[v] = marginal(vnfac, vars(vnfac)-un.var)
-    del_edge!(bnd.bn, un, vn)
+    #bnd.fg[v] = marginal(vnfac, vars(vnfac)-un)
 end
 
 function set_factor!(bnd::BayesNetDAI, i::Int, vals::Vector{Float64})
@@ -139,10 +77,10 @@ end
 
 function adjust_factor!(bnd::BayesNetDAI, node, addlist, dellist)
     for n in dellist
-        del_edge!(bnd, node, n)
+        del_edge!(bnd, n, node)
     end
     for n in addlist
-        add_edge!(bnd, node, n)
+        add_edge!(bnd, n, node)
     end
     #bnd.dirty = true
     #fac = bnd.fg[node]
@@ -162,7 +100,7 @@ function adjust_factor!(bnd::BayesNetDAI, node, addlist, dellist)
 end
 
 function show(io::IO, bnd::BayesNetDAI)
-    show(io, bnd.bn)
+    show(io, bnd.verts)
     show(io, bnd.fg)
     #print(io, " : [")
     #varvec = vars(vars((n.fac)))
@@ -215,13 +153,20 @@ function BayesNetSampler(n::Int, data::Matrix{Int})
     eye(Bool, n))
 end
 
+function show(io::IO, bns::BayesNetSampler)
+    show(io, bns.mat[bns.x,bns.x])
+end
+
 function factor_klds(bnd1::BayesNetDAI, bnd2::BayesNetDAI)
     0 #FIXME
 end
 
 function energy(bns::BayesNetSampler)
-    # FIXME Untested code below!
-    #
+    #limit number of parents
+    if any(sum(bns.mat, 2) .> bns.limparent + 1) # +1 -> diagonal
+        return 1e20
+    end
+
     # energy contribution from structural
     adj_diff = sum(abs(bns.mat[bns.x,bns.x] - bns.template)) 
     e_struct = bns.p_structural * adj_diff
@@ -231,33 +176,23 @@ function energy(bns::BayesNetSampler)
     e_cpd = bns.p_cpds * cpd_diff
 
     ##### energy from data (likelihood) ####
-    accum = 0.0
-
     counts = {}
     for node in bns.changelist
-        #limit number of parents
-        if length(bns.bnd.bn.adjlist[node]) > bns.limparent
-            @show bns.bnd.bn.adjlist[node]
-            return 1e20
-        end
-        push!(counts, zeros(Int,nrStates(bns.bnd.fg[node])))
-    end
-
-    allvars = VarSet([x.var for x=bns.bnd.bn.vertices]...)
-    for i=1:length(counts) # Assemble count data structure
-        node = bns.changelist[i]
         fac = bns.bnd.fg[node]
         facvs = vars(fac)
         inds = labels(fac)
+        count = zeros(Int,nrStates(fac))
         for row=1:size(bns.data,1)
-            index = calcLinearState(facvs, bns.data[inds]) 
-            counts[i][index] += 1
+            index = calcLinearState(facvs, vec(bns.data[row,inds]))
+            count[index] += 1
         end
+        push!(counts, count)
     end
 
     for i=1:length(counts) # Calculate likelihood
+        accum = 0.0
         node = bns.changelist[i]
-        v = bns.bnd.bn.vertices[node].var
+        v = bns.bnd.verts[node]
         arity = states(v)
         fac = bns.bnd.fg[node]
         pars = vars(fac) - v
@@ -268,7 +203,7 @@ function energy(bns::BayesNetSampler)
         end
         bns.fvalue[node] = -accum
     end
-    return sum(bns.fvalue) - bns.logqfactor # TODO - or + logqfactor here?
+    return sum(bns.fvalue) - bns.logqfactor + e_cpd + e_struct # TODO - or + logqfactor here?
 end
 
 function propose(bns::BayesNetSampler)
@@ -286,8 +221,9 @@ function propose(bns::BayesNetSampler)
     dellist = (Int=>Vector{Int})[]
     x = bns.x # convenience labels
     mat = bns.mat 
-    numnodes = length(bns.bnd.bn.vertices)
+    numnodes = length(bns.bnd.verts)
     scheme = rand(1:3)
+
     if scheme==1 # Temporal order change
         k = rand(1:numnodes-1)
 
@@ -366,7 +302,6 @@ function propose(bns::BayesNetSampler)
                 get(dellist, node,[]))
         end
     end
-
     return scheme
 end
 
@@ -380,7 +315,14 @@ end
 
 function check_bns(bns::BayesNetSampler)
     # Sanity check over topological node ordering
-    # TODO
+    n = size(bns.mat,1)
+    for i=1:n, j=1:i
+        if i==j
+            assert(bns.mat[i,j])
+        else
+            assert(!bns.mat[i,j])
+        end
+    end
 
     # Sanity checks over bayesnetdai
     check_bnd(bns.bnd)
@@ -388,7 +330,7 @@ end
 
 function check_bnd(bnd::BayesNetDAI)
     for i=1:numFactors(bnd.fg)
-        v = bnd.bn.vertices[i].var
+        v = bnd.verts[i]
         arity = states(v)
         parvars = vars(bnd.fg[i]) - v
         numparstates = nrStates(parvars)
@@ -396,7 +338,9 @@ function check_bnd(bnd::BayesNetDAI)
             tot = 0.0
             for state=1:arity
                 index = conditionalState(v, parvars, state, parstate)
-                tot += bnd.fg[i][index]
+                amt = bnd.fg[i][index]
+                Base.Test.@test 0.0 <= amt <= 1.0
+                tot += amt
             end
             Base.Test.@test_approx_eq tot 1.0
         end
@@ -410,7 +354,7 @@ function kld(bnd::BayesNetDAI, other::BayesNetDAI)
     end
     accum = 0.0
     for i=1:numFactors(bnd.fg)
-        v = other.bn.vertices[i].var
+        v = other.verts[i]
         arity = states(v)
         numparstates = iround(nrStates(other.fg[i])/arity)
         # Assumption: same ordering between bnd and other
@@ -438,16 +382,16 @@ function entropy(bnd::BayesNetDAI)
     bnd.dirty = false
     accum = 0.0
     for i in 1:numFactors(bnd.fg)
-        v = bnd.bn.vertices[i]
-        arity = states(v.var)
-        pars = vars(bnd.fg[i]) - v.var
+        v = bnd.verts[i]
+        arity = states(v)
+        pars = vars(bnd.fg[i]) - v
         numparstates = nrStates(pars)
         margfac = marginal(bnd.jt, pars)
         for parstate in 1:numparstates
             accumsum = 0.0
             tot = 0.0
             for state in 1:arity
-                temp = bnd.fg[i][conditionalState(v.var, pars, state, parstate)]
+                temp = bnd.fg[i][conditionalState(v, pars, state, parstate)]
                 accumsum -= temp == 0.0 ? 0.0 : temp * log2(temp)
                 tot += temp
             end
@@ -463,9 +407,9 @@ function naive_entropy(bnd::BayesNetDAI)
     numstates = 1
     accum = 0.0
     tot = 0.0
-    allvars = VarSet([x.var for x=bnd.bn.vertices]...)
-    for n in bnd.bn.vertices
-        numstates *= states(n.var)
+    allvars = VarSet(bnd.verts...)
+    for n in bnd.verts
+        numstates *= states(n)
     end
     assert(numstates == nrStates(allvars))
 
