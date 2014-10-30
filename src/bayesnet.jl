@@ -23,8 +23,8 @@ end
 function add_edge!(bnd::BayesNetDAI, u::Int, v::Int)
     un,vn = bnd.verts[[u,v]]
     vnfac = bnd.fg[v]
-    bnd.dirty=true
     assert(!(un in vars(vnfac)))
+    bnd.dirty=true
     bnd.fg[v] = embed(vnfac, vars(vnfac)+un)
 end
 
@@ -46,7 +46,9 @@ function del_edge!(bnd::BayesNetDAI, u::Int, v::Int)
         newfac[conditionalState(vn, newpars, 2, parstate)] = 1 - newval
     end
     bnd.fg[v] = newfac
-    #bnd.fg[v] = marginal(vnfac, vars(vnfac)-un)
+    #bnd.fg[v] = marginal(vnfac, vars(vnfac)-un) # IIRC, this doesn't properly
+    #handle the CPD structure, but it would otherwise replace most the above
+    #code
 end
 
 function set_factor!(bnd::BayesNetDAI, i::Int, vals::Vector{Float64})
@@ -82,20 +84,7 @@ function adjust_factor!(bnd::BayesNetDAI, node, addlist, dellist)
     for n in addlist
         add_edge!(bnd, n, node)
     end
-    #bnd.dirty = true
-    #fac = bnd.fg[node]
-    #fvars = vars(fac)
-    #for n in dellist
-        #erase!(fvars, Var(n,2)) # FIXME: hardcoded binary
-    #end
-    #fac = marginal(fac, fvars)
-    #for n in addlist
-        #insert!(fvars, Var(n,2)) # FIXME: hardcoded binary
-    #end
-    #fac = embed(fac, fvars)
-
-    #bnd.fg[node] = fac
-    check_bnd(bnd) # I suspect this will fail FIXME: This slows things down a lot and is just for development
+    check_bnd(bnd) #FIXME: This slows things down a lot and is just for development
     return 0.0 # FIXME hardcoded binary: new_count * lgamma(self.arity)
 end
 
