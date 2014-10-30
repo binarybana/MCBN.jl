@@ -63,7 +63,7 @@ origE = MCBN.energy(bns)
 origfvalue = copy(bns.fvalue)
 
 @time for i=1:1000
-    MCBN.propose(bns)
+    MCBN.propose!(bns)
     MCBN.check_bns(bns)
     MCBN.reject(bns)
     MCBN.check_bns(bns)
@@ -73,7 +73,7 @@ origfvalue = copy(bns.fvalue)
 end
 
 @time for i=1:1000
-    s = MCBN.propose(bns)
+    s = MCBN.propose!(bns)
     MCBN.check_bns(bns)
     E1 = MCBN.energy(bns)
     f1 = copy(bns.fvalue)
@@ -105,8 +105,8 @@ end
         ##kl2 = con.kld(rcon)
         ##assert (kl1 >= 0.0)
         ##assert (kl2 >= 0.0)
-        ##rcon.propose()
-        ##con.propose()
+        ##rcon.propose!()
+        ##con.propose!()
 
     #t = BayesNetCPD(np.ones(6,dtype=np.int32)*2)
     #for i in range(500):

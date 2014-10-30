@@ -95,7 +95,7 @@ function adjust_factor!(bnd::BayesNetDAI, node, addlist, dellist)
     #fac = embed(fac, fvars)
 
     #bnd.fg[node] = fac
-    check_bnd(bnd) # I suspect this will fail
+    check_bnd(bnd) # I suspect this will fail FIXME: This slows things down a lot and is just for development
     return 0.0 # FIXME hardcoded binary: new_count * lgamma(self.arity)
 end
 
@@ -206,7 +206,7 @@ function energy(bns::BayesNetSampler)
     return sum(bns.fvalue) - bns.logqfactor + e_cpd + e_struct # TODO - or + logqfactor here?
 end
 
-function propose(bns::BayesNetSampler)
+function propose!(bns::BayesNetSampler)
     bns.bnd.dirty = true
     clearBackups!(bns.bnd.fg)
     bns.oldx[:] = bns.x
