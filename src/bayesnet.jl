@@ -30,12 +30,10 @@ end
 
 function del_edge!(bnd::BayesNetDAI, u::Int, v::Int)
     un,vn = bnd.verts[[u,v]]
-    vnfac = bnd.fg[v]
     bnd.dirty=true
 
     fac = bnd.fg[v]
-    newvars = vars(fac)
-    erase!(newvars, un) # premature optimization ya!
+    newvars = vars(fac) - un
     newpars = newvars - vn
     newfac = Factor(newvars)
 
@@ -64,9 +62,8 @@ function move_params!(bnd::BayesNetDAI, node)
     bnd.dirty = true
 
     fac = bnd.fg[node]
-    pars = vars(fac) 
-    curr = Var(node,2) # FIXME: hardcoded binary
-    erase!(pars, curr)
+    curr = bnd.verts[node]
+    pars = vars(fac) - curr
 
     for p in 1:nrStates(pars) # FIXME: hardcoded binary
         newval = rand()
@@ -320,6 +317,7 @@ end
 function check_bnd(bnd::BayesNetDAI)
     for i=1:numFactors(bnd.fg)
         v = bnd.verts[i]
+        Base.Test.@test v in bnd.fg[i]
         arity = states(v)
         parvars = vars(bnd.fg[i]) - v
         numparstates = nrStates(parvars)
