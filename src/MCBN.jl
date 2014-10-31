@@ -5,8 +5,9 @@ module MCBN
     using Distributions
     #using Graphs
     #import Graphs: vertex_index, make_vertex, add_edge!
-    #import OBC: Sampler, energy, propose!, reject, sample
-    #import SAMC: SAMCRecord, set_energy_limits
+    
+    using SAMC
+    import SAMC: propose!, energy, reject!, save!
 
     include("bayesnet.jl")
 

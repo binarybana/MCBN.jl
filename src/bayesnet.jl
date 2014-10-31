@@ -296,12 +296,19 @@ function propose!(bns::BayesNetSampler)
     return scheme
 end
 
-function reject(bns::BayesNetSampler)
+function reject!(bns::BayesNetSampler)
     bns.bnd.dirty = true
     bns.x[:] = bns.oldx
     bns.fvalue[:] = bns.oldfvalue
     bns.mat[:] = bns.oldmat
     restoreFactors!(bns.bnd.fg)
+end
+
+function save!(bns::BayesNetSampler)
+    bns.oldx[:] = bns.x
+    bns.oldfvalue[:] = bns.fvalue
+    bns.oldmat[:] = bns.mat
+    clearBackups!(bns.bnd.fg)
 end
 
 function check_bns(bns::BayesNetSampler)
