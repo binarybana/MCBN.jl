@@ -149,7 +149,7 @@ end
 
 function energy(bns::BayesNetSampler)
     #limit number of parents
-    if any(sum(bns.mat, 2) .> bns.limparent + 1) # +1 -> diagonal
+    if any(sum(bns.mat, 2) .> bns.limparent + 1) # +1 -> diagonal # FIXME: this is actually pretty slow
         return 1e20
     end
 
@@ -163,13 +163,18 @@ function energy(bns::BayesNetSampler)
 
     ##### energy from data (likelihood) ####
     counts = {}
+    buf = Int[]
     for node in bns.changelist
         fac = bns.bnd.fg[node]
         facvs = vars(fac)
         inds = labels(fac)
         count = zeros(Int,nrStates(fac))
         for row=1:size(bns.data,1)
-            index = calcLinearState(facvs, vec(bns.data[row,inds]))
+            for ind in inds
+                push!(buf, bns.data[row,ind])
+            end
+            index = calcLinearState(facvs, buf)
+            empty!(buf)
             count[index] += 1
         end
         push!(counts, count)
