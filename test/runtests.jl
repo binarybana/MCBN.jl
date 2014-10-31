@@ -62,19 +62,19 @@ bns = MCBN.BayesNetSampler(3, rand(1:2, 5,3))
 origE = MCBN.energy(bns)
 origfvalue = copy(bns.fvalue)
 
-@time for i=1:10000
+@time for i=1:1000
     scheme = MCBN.propose!(bns)
-    #MCBN.check_bns(bns)
-    MCBN.reject(bns)
-    #MCBN.check_bns(bns)
+    MCBN.check_bns(bns)
+    MCBN.reject!(bns)
+    MCBN.check_bns(bns)
     E = MCBN.energy(bns)
     @test_approx_eq bns.fvalue origfvalue
     @test_approx_eq E origE
 end
 
-@time for i=1:10000
+@time for i=1:1000
     s = MCBN.propose!(bns)
-    #MCBN.check_bns(bns)
+    MCBN.check_bns(bns)
     E1 = MCBN.energy(bns)
     f1 = copy(bns.fvalue)
     bns.changelist = [1:3]
