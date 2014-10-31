@@ -81,7 +81,7 @@ function adjust_factor!(bnd::BayesNetDAI, node, addlist, dellist)
     for n in addlist
         add_edge!(bnd, n, node)
     end
-    check_bnd(bnd) #FIXME: This slows things down a lot and is just for development
+    #check_bnd(bnd) #FIXME: This slows things down a lot and is just for development
     return 0.0 # FIXME hardcoded binary: new_count * lgamma(self.arity)
 end
 
