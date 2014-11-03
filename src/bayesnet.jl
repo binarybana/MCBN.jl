@@ -102,11 +102,6 @@ end
 type BayesNetSampler <: Sampler
     bnd::BayesNetDAI
     data::Matrix{Int}
-    p_cpds::Float64
-    cpds::BayesNetDAI
-    p_structural::Float64
-    template::Matrix{Bool}
-    limparent::Int
     changelist::Vector{Int}
     x::Vector{Int} # node ordering/mapping
     oldx::Vector{Int}
@@ -115,19 +110,16 @@ type BayesNetSampler <: Sampler
     logqfactor::Float64
     mat::Matrix{Bool}
     oldmat::Matrix{Bool}
+    limparent::Int
+    prior::Function
 end
 
-function BayesNetSampler(n::Int, data::Matrix{Int}) 
+function BayesNetSampler(n::Int, data::Matrix{Int}, prior=basic_prior::Function) 
     assert(all(0 .< data .<= 2)) # FIXME binary hardcode
     
     BayesNetSampler(
     BayesNetDAI(n),
     data,
-    0.2,
-    BayesNetDAI(n),
-    0.2,
-    eye(Bool, n),
-    4,
     [1:n],
     randperm(n),
     randperm(n),
@@ -135,30 +127,18 @@ function BayesNetSampler(n::Int, data::Matrix{Int})
     zeros(Float64, n),
     0.0,
     eye(Bool, n),
-    eye(Bool, n))
+    eye(Bool, n),
+    4,
+    prior)
 end
 
 function show(io::IO, bns::BayesNetSampler)
     show(io, bns.mat[bns.x,bns.x])
 end
 
-function factor_klds(bnd1::BayesNetDAI, bnd2::BayesNetDAI)
-    0 #FIXME
-end
-
 function energy(bns::BayesNetSampler)
-    #limit number of parents
-    if any(sum(bns.mat, 2) .> bns.limparent + 1) # +1 -> diagonal # FIXME: this is actually pretty slow
-        return 1e20
-    end
 
-    # energy contribution from structural
-    adj_diff = sum(abs(bns.mat[bns.x,bns.x] - bns.template)) 
-    e_struct = bns.p_structural * adj_diff
-
-    # energy contribution from cpds
-    cpd_diff = factor_klds(bns.bnd, bns.cpds)
-    e_cpd = bns.p_cpds * cpd_diff
+    eprior = bns.prior(bns)
 
     ##### energy from data (likelihood) ####
     counts = {}
@@ -193,7 +173,7 @@ function energy(bns::BayesNetSampler)
         end
         bns.fvalue[node] = -accum
     end
-    return sum(bns.fvalue) - bns.logqfactor + e_cpd + e_struct # TODO - or + logqfactor here?
+    return sum(bns.fvalue) - bns.logqfactor + eprior # TODO - or + logqfactor here?
 end
 
 function propose!(bns::BayesNetSampler)
@@ -425,6 +405,9 @@ function naive_entropy(bnd::BayesNetDAI)
     return -accum
 end
 
+function basic_prior(bns::BayesNetSampler)
+    0.0
+end
 
 #
 #need to handle prior information: structure and cpd
