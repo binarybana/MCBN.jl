@@ -33,13 +33,15 @@ function del_edge!(bnd::BayesNetDAI, u::Int, v::Int)
     bnd.dirty=true
 
     fac = bnd.fg[v]
-    newvars = vars(fac) - un
+    allvars = vars(fac)
+    newvars = allvars - un
     newpars = newvars - vn
     newfac = Factor(newvars)
 
-    for parstate in 1:nrStates(newpars), vs in 1:2 # FIXME: hardcoded binary
-        newval = (fac[conditionalState2(vn, un, newpars, vs, 1, parstate)] +
-            fac[conditionalState2(vn, un, newpars, vs, 2, parstate)])/2
+    for parstate in 1:nrStates(newpars) 
+        # FIXME: hardcoded binary
+        i1,i2 = conditionalState2(allvars, vn, un, newpars, 1, parstate)
+        newval = (fac[i1] + fac[i2])/2
         newfac[conditionalState(vn, newpars, 1, parstate)] = newval
         newfac[conditionalState(vn, newpars, 2, parstate)] = 1 - newval
     end
