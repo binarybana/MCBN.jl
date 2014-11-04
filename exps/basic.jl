@@ -22,8 +22,16 @@ function prior(bns::MCBN.BayesNetSampler)
     #template::Matrix{Bool}
     #limparent::Int
     #limit number of parents
-    if any(sum(bns.mat, 2) .> bns.limparent + 1) # +1 -> diagonal # FIXME: this is actually pretty slow
-        return 1e10
+    d = size(bns.mat,1)
+    tot = 0
+    for i=1:d
+        for j=1:d
+            tot += bns.mat[i,j]
+        end
+        if tot > bns.limparent + 1
+            return 1e10
+        end
+        tot = 0
     end
 
     # energy contribution from structural
@@ -37,5 +45,7 @@ function prior(bns::MCBN.BayesNetSampler)
 end
 
 bns = MCBN.BayesNetSampler(D, rand(1:2, 60,D), prior)
-samc = SAMC.set_energy_limits(bns)
-@time SAMC.sample(samc, 10000)
+samc = SAMC.set_energy_limits(bns, refden_power=1.0)
+samc.thin = 1000
+samc.stepscale = 3000.0
+@time SAMC.sample(samc, 300_000)
