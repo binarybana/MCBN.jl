@@ -8,10 +8,7 @@ type BayesNetDAI
     memo_entropy::Float64
 end
 
-function BayesNetDAI(n::Int)
-    g = BayesNet(n)
-    BayesNetDAI(g)
-end
+length(net::BayesNetDAI) = length(net.verts)
 
 function BayesNetDAI(n::Int)
     verts = [Var(x,2) for x=1:n] # FIXME hardcoded binary
@@ -20,10 +17,80 @@ function BayesNetDAI(n::Int)
     BayesNetDAI(verts, fg, jt, true, -Inf)
 end
 
+function random_net(n::Int=5, weights=WeightVec([0.5,0.3,0.1]))
+    count = 0
+    cyclic = true
+    local net
+    while cyclic
+        net = BayesNetDAI(n)
+        if n==1
+            move_params!(net,1)
+            return net
+        end
+        for i=1:n
+            for j=1:(sample(weights)-1)
+                out = i
+                while out == i
+                    out = rand(1:n)
+                end
+                add_edge!(net, out, i)
+            end
+            move_params!(net,i)
+        end
+        g = net2graph(net)
+        cyclic = test_cyclic_by_dfs(g)
+        count += 1
+        if cyclic
+            print("\rGenerated $count cyclic graphs, restarting!")
+        end
+    end
+    println("")
+    net
+end
+
+function net2graph(net)
+    N = length(net.verts)
+    g = simple_inclist(N)
+    for i=1:N
+        fac = net.fg[i]
+        allvars = vars(fac)
+        pars = allvars - net.verts[i]
+        for n in labels(pars)
+            add_edge!(g, n, i)
+        end
+    end
+    g
+end
+
+function draw_data(net, num)
+    g = net2graph(net)
+    tsort = topological_sort_by_dfs(g)
+    data = zeros(Int, num_vertices(g), num)
+    for i=1:num, j in tsort
+        fac = net.fg[j]
+        allvars = vars(fac)
+        pars = allvars - net.verts[j]
+        if length(pars) > 0
+            pstates = Int[]
+            for k in labels(pars)
+                push!(pstates, data[findfirst(tsort,k),i])
+            end
+            pstate = calcLinearState(pars, pstates)
+            w = WeightVec([fac[conditionalState(net.verts[j], pars, 1, pstate)],
+                            fac[conditionalState(net.verts[j], pars, 2, pstate)]])
+            data[j,i] = sample(1:2, w)
+        else
+            data[j,i] = sample(1:2, WeightVec(p(fac)))
+        end
+    end
+    data
+end
+
 function add_edge!(bnd::BayesNetDAI, u::Int, v::Int)
     un,vn = bnd.verts[[u,v]]
     vnfac = bnd.fg[v]
-    assert(!(un in vars(vnfac)))
+    #assert(!(un in vars(vnfac)))
+    un in vars(vnfac) && return
     bnd.dirty=true
     bnd.fg[v] = embed(vnfac, vars(vnfac)+un)
 end
@@ -114,13 +181,13 @@ type BayesNetSampler <: Sampler
     oldmat::Matrix{Bool}
     limparent::Int
     prior::Function
+    theta::Float64
 end
 
-function BayesNetSampler(n::Int, data::Matrix{Int}, prior=basic_prior::Function) 
+function BayesNetSampler(net::BayesNetDAI, data::Matrix{Int}, prior=basic_prior::Function) 
     assert(all(0 .< data .<= 2)) # FIXME binary hardcode
-    
-    BayesNetSampler(
-    BayesNetDAI(n),
+    n = length(net)
+    BayesNetSampler(net,
     data,
     [1:n],
     randperm(n),
@@ -131,7 +198,11 @@ function BayesNetSampler(n::Int, data::Matrix{Int}, prior=basic_prior::Function)
     eye(Bool, n),
     eye(Bool, n),
     4,
-    prior)
+    prior, -Inf)
+end
+
+function BayesNetSampler(n::Int, data::Matrix{Int}, prior=basic_prior::Function) 
+    BayesNetSampler(BayesNetDAI(n), data, prior)
 end
 
 function show(io::IO, bns::BayesNetSampler)
@@ -150,9 +221,9 @@ function energy(bns::BayesNetSampler)
         facvs = vars(fac)
         inds = labels(fac)
         count = zeros(Int,nrStates(fac))
-        for row=1:size(bns.data,1)
+        for row=1:size(bns.data,2)
             for ind in inds
-                push!(buf, bns.data[row,ind])
+                push!(buf, bns.data[ind,row])
             end
             index = calcLinearState(facvs, buf)
             empty!(buf)

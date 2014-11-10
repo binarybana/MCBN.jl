@@ -44,8 +44,22 @@ function prior(bns::MCBN.BayesNetSampler)
     return e_cpd + e_struct
 end
 
-bns = MCBN.BayesNetSampler(D, rand(1:2, 60,D), prior)
-samc = SAMC.set_energy_limits(bns, refden_power=1.0)
-samc.thin = 1000
-samc.stepscale = 3000.0
-@time SAMC.sample(samc, 300_000)
+preseed = rand(Uint)
+srand(123)
+data = rand(1:2, D, 60)
+srand(preseed)
+
+#bns = MCBN.BayesNetSampler(D, data, prior)
+#samc1 = SAMC.set_energy_limits(bns, refden_power=0.0)
+#samc1.thin = 1000
+#samc1.stepscale = 20.0
+#samc1.burn = 40_000
+#@time SAMC.sample(samc1, 8_00_000, beta=0.6)
+
+## PopSAMC
+bngen = x->MCBN.BayesNetSampler(D, data, prior)
+samc2 = SAMC.set_energy_limits(bngen, 10, refden_power=0.0)
+samc2.thin = 1000
+samc2.stepscale = 100.0
+samc2.burn = 100_000
+@time SAMC.sample(samc2, 1_000_000, beta=0.6)

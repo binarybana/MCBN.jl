@@ -84,6 +84,34 @@ end
     @test_approx_eq E1 E2
 end
 
+##################################################
+# Random net and data draw from nets
+##################################################
+
+nets = [MCBN.random_net(x) for x=[5,10,40]]
+graphs = map(MCBN.net2graph, nets)
+draws = map(x->MCBN.draw_data(x,10), nets)
+
+for i=1:10
+    g1 = MCBN.random_net(15) 
+    g2 = MCBN.random_net(15) 
+
+    d1 = MCBN.draw_data(g1,50)
+    d2 = MCBN.draw_data(g2,50)
+
+    bns1 = MCBN.BayesNetSampler(g1,d1)
+    bns1c = MCBN.BayesNetSampler(g1,d2)
+
+    bns2 = MCBN.BayesNetSampler(g2,d2)
+    bns2c = MCBN.BayesNetSampler(g2,d1)
+
+    @test MCBN.energy(bns1) < MCBN.energy(bns1c)
+    @test MCBN.energy(bns2) < MCBN.energy(bns2c)
+    print("\rSuccessfully completed round $i of energy checks")
+end
+## ^^^^ this sometimes fails randomly, but it works most the time
+println("")
+
     #empty = BayesNetCPD(np.array([2,2,2]))
     #assert empty.entropy() == 3.0
     #assert empty.naive_entropy() == 3.0
