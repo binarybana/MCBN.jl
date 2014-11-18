@@ -18,7 +18,7 @@ function BayesNetDAI(n::Int)
 end
 
 function random_net(n::Int=5, weights=WeightVec([0.5,0.3,0.1]))
-    count = 0
+    count = -1
     cyclic = true
     local net
     while cyclic
@@ -40,11 +40,10 @@ function random_net(n::Int=5, weights=WeightVec([0.5,0.3,0.1]))
         g = net2graph(net)
         cyclic = test_cyclic_by_dfs(g)
         count += 1
-        if cyclic
-            print("\rGenerated $count cyclic graphs, restarting!")
-        end
     end
-    println("")
+    #if count > 0
+        #println("Generated $count cyclic graphs, restarting!")
+    #end
     net
 end
 
@@ -61,6 +60,8 @@ function net2graph(net)
     end
     g
 end
+
+function net2mat
 
 function draw_data(net, num)
     g = net2graph(net)
@@ -303,9 +304,9 @@ function propose!(bns::BayesNetSampler)
         bns.x[k], bns.x[k+1] = bns.x[k+1], bns.x[k]
 
     elseif scheme==2 # skeletal change
-        underparlimit = true
+        overparlimit = true
         local i, j, edgedel
-        while underparlimit
+        while overparlimit
             i = rand(1:numnodes)
             j = rand(1:numnodes)
             while i==j
@@ -317,8 +318,8 @@ function propose!(bns::BayesNetSampler)
 
             edgedel = mat[i,j]
             mat[i,j] = !mat[i,j]
-            underparlimit = sum(mat[:,j]) > bns.limparent+1 #+1 for diagonal
-            if underparlimit
+            overparlimit = sum(mat[:,j]) > bns.limparent+1 #+1 for diagonal
+            if overparlimit
                 mat[i,j] = !mat[i,j] # reset for another loop
             end
         end
