@@ -399,7 +399,7 @@ function check_bnd(bnd::BayesNetDAI)
 end
 
 function kld(bnd::BayesNetDAI, other::BayesNetDAI)
-    if !bnd.dirty
+    if bnd.dirty
         bnd.memo_entropy = entropy(bnd)
         # Now entropy and jtree are correct
     end
