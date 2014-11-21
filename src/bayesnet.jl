@@ -96,7 +96,8 @@ function add_edge!(bnd::BayesNetDAI, u::Int, v::Int)
     #assert(!(un in vars(vnfac)))
     un in vars(vnfac) && return
     bnd.dirty=true
-    bnd.fg[v] = embed(vnfac, vars(vnfac)+un)
+    #bnd.fg[v] = Factor(vars(vnfac)+un)
+    bnd.fg[v] = embed(vnfac, un)
 end
 
 function del_edge!(bnd::BayesNetDAI, u::Int, v::Int)
