@@ -91,8 +91,10 @@ end
 nets = [MCBN.random_net(x) for x=[5,10,40]]
 graphs = map(MCBN.net2graph, nets)
 draws = map(x->MCBN.draw_data(x,10), nets)
+#klds = Float64[]
 
-for i=1:10
+global g1,g2,d1,d2,bns1,bns2,bns1c,bns2c
+for i=1:1000
     g1 = MCBN.random_net(15) 
     g2 = MCBN.random_net(15) 
 
@@ -105,11 +107,17 @@ for i=1:10
     bns2 = MCBN.BayesNetSampler(g2,d2)
     bns2c = MCBN.BayesNetSampler(g2,d1)
 
-    @test MCBN.energy(bns1) < MCBN.energy(bns1c)
-    @test MCBN.energy(bns2) < MCBN.energy(bns2c)
-    print("\rSuccessfully completed round $i of energy checks")
+    diff1 = MCBN.energy(bns1) - MCBN.energy(bns1c)
+    diff2 = MCBN.energy(bns2) - MCBN.energy(bns2c)
+    @test (diff1 + diff2) < 0
+    # We do it this way because sometimes both networks will actually favor the
+    # same dataset, but usually the 'wrong' favoritism is much smaller
+    # magnitude than the correct one. So summing them up will make this
+    # apparent (and prevent failures)
+
+    #push!(klds, MCBN.kld(g1,g2))
+    i%10==0 && print("\rSuccessfully completed round $i of energy checks")
 end
-## ^^^^ this sometimes fails randomly, but it works most the time
 println("")
 
     #empty = BayesNetCPD(np.array([2,2,2]))

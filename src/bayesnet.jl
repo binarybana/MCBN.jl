@@ -61,7 +61,10 @@ function net2graph(net)
     g
 end
 
-function net2mat
+function net2mat(net)
+    g = net2graph(net)
+    adjacency_matrix(g)
+end
 
 function draw_data(net, num)
     g = net2graph(net)
@@ -182,7 +185,6 @@ type BayesNetSampler <: Sampler
     oldmat::Matrix{Bool}
     limparent::Int
     prior::Function
-    theta::Float64
 end
 
 function BayesNetSampler(net::BayesNetDAI, data::Matrix{Int}, prior=basic_prior::Function) 
@@ -196,10 +198,10 @@ function BayesNetSampler(net::BayesNetDAI, data::Matrix{Int}, prior=basic_prior:
     zeros(Float64, n),
     zeros(Float64, n),
     0.0,
-    eye(Bool, n),
-    eye(Bool, n),
+    zeros(Bool,n,n),
+    zeros(Bool,n,n),
     4,
-    prior, -Inf)
+    prior)
 end
 
 function BayesNetSampler(n::Int, data::Matrix{Int}, prior=basic_prior::Function) 
@@ -317,10 +319,10 @@ function propose!(bns::BayesNetSampler)
             end
 
             edgedel = mat[i,j]
-            mat[i,j] = !mat[i,j]
-            overparlimit = sum(mat[:,j]) > bns.limparent+1 #+1 for diagonal
+            mat[i,j] = !edgedel
+            overparlimit = sum(mat[:,j]) > bns.limparent
             if overparlimit
-                mat[i,j] = !mat[i,j] # reset for another loop
+                mat[i,j] = edgedel # reset for another loop
             end
         end
         push!(bns.changelist, x[j])
@@ -368,15 +370,15 @@ function check_bns(bns::BayesNetSampler)
     # Sanity check over topological node ordering
     n = size(bns.mat,1)
     for i=1:n, j=1:i
-        if i==j
-            assert(bns.mat[i,j])
-        else
-            assert(!bns.mat[i,j])
-        end
+        assert(!bns.mat[i,j])
     end
 
     # Sanity checks over bayesnetdai
     check_bnd(bns.bnd)
+    #@show bns.mat[bns.x,bns.x]
+    #@show net2mat(bns.bnd)
+    ord = sortperm(bns.x)
+    Base.Test.@test all(bns.mat[ord,ord] .== net2mat(bns.bnd))
 end
 
 function check_bnd(bnd::BayesNetDAI)
