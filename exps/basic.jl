@@ -5,7 +5,7 @@ reload("MCBN")
 
 
 D = 8
-template = eye(Bool, D)
+template = zeros(Bool,D,D)
 cpds = MCBN.BayesNetDAI(D)
 
 function factor_klds(bnd1::MCBN.BayesNetDAI, bnd2::MCBN.BayesNetDAI)
@@ -46,7 +46,9 @@ end
 
 preseed = rand(Uint)
 srand(123)
-data = rand(1:2, D, 60)
+#data = rand(1:2, D, 60)
+gold = MCBN.random_net(D) 
+data = MCBN.draw_data(gold,5)
 srand(preseed)
 
 #bns = MCBN.BayesNetSampler(D, data, prior)
@@ -59,7 +61,17 @@ srand(preseed)
 ## PopSAMC
 bngen = x->MCBN.BayesNetSampler(D, data, prior)
 samc2 = SAMC.set_energy_limits(bngen, 10, refden_power=0.0)
-samc2.thin = 1000
-samc2.stepscale = 100.0
-samc2.burn = 100_000
-@time SAMC.sample(samc2, 1_000_000, beta=0.6)
+samc2.thin = 100
+samc2.stepscale = 10.0
+samc2.burn = 1_000
+@profile SAMC.sample(samc2, 10_000, beta=0.6)
+
+function edge_prob(bns::MCBN.BayesNetSampler)
+    ord = sortperm(bns.x)
+    return bns.mat[ord,ord]
+end
+
+kld_gold(bns::MCBN.BayesNetSampler) = MCBN.kld(gold, bns.bnd)
+
+post_edge = SAMC.posterior_e(edge_prob,samc2)
+post_kld = SAMC.posterior_e(kld_gold,samc2)
