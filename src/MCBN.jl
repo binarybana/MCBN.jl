@@ -12,7 +12,7 @@ module MCBN
     #import Graphs: vertex_index, make_vertex, add_edge!
     
     using SAMC
-    import SAMC: propose!, energy, reject!, save!, Sampler
+    import SAMC: propose!, energy, reject!, save!, record, Sampler
 
     include("bayesnet.jl")
 

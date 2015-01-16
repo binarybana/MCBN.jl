@@ -114,8 +114,10 @@ function del_edge!(bnd::BayesNetDAI, u::Int, v::Int)
         # FIXME: hardcoded binary
         i1,i2 = conditionalState2(allvars, vn, un, newpars, 1, parstate)
         newval = (fac[i1] + fac[i2])/2
-        newfac[conditionalState(vn, newpars, 1, parstate)] = newval
-        newfac[conditionalState(vn, newpars, 2, parstate)] = 1 - newval
+        c1 = conditionalState(vn, newpars, 1, parstate)
+        c2 = conditionalState(vn, newpars, 2, parstate)
+        newfac[c1] = newval
+        newfac[c2] = 1 - newval
     end
     bnd.fg[v] = newfac
     #bnd.fg[v] = marginal(vnfac, vars(vnfac)-un) # IIRC, this doesn't properly
@@ -141,8 +143,10 @@ function move_params!(bnd::BayesNetDAI, node)
 
     for p in 1:nrStates(pars) # FIXME: hardcoded binary
         newval = rand()
-        fac[conditionalState(curr, pars, 1, p)] = newval
-        fac[conditionalState(curr, pars, 2, p)] = 1 - newval
+        c1 = conditionalState(curr, pars, 1, p)
+        c2 = conditionalState(curr, pars, 2, p)
+        fac[c1] = newval
+        fac[c2] = 1 - newval
     end
     bnd.fg[node] = fac
     return 0.0 # FIXME hardcoded binary: new_count * lgamma(self.arity)
@@ -221,19 +225,19 @@ function energy(bns::BayesNetSampler)
     counts = {}
     buf = Int[]
     for node in bns.changelist
-        fac = bns.bnd.fg[node]
-        facvs = vars(fac)
-        inds = labels(fac)
-        count = zeros(Int,nrStates(fac))
-        for row=1:size(bns.data,2)
-            for ind in inds
-                push!(buf, bns.data[ind,row])
-            end
-            index = calcLinearState(facvs, buf)
-            empty!(buf)
-            count[index] += 1
-        end
-        push!(counts, count)
+      fac = bns.bnd.fg[node]
+      facvs = vars(fac)
+      inds = labels(fac)
+      count = zeros(Int,nrStates(fac))
+      for row=1:size(bns.data,2)
+          for ind in inds
+              push!(buf, bns.data[ind,row])
+          end
+          index = calcLinearState(facvs, buf)
+          empty!(buf)
+          count[index] += 1
+      end
+      push!(counts, count)
     end
 
     for i=1:length(counts) # Calculate likelihood
@@ -365,6 +369,10 @@ function save!(bns::BayesNetSampler)
     bns.oldfvalue[:] = bns.fvalue
     bns.oldmat[:] = bns.mat
     clearBackups!(bns.bnd.fg)
+end
+
+function record(bns::BayesNetSampler)
+  return deepcopy(bns.bnd)
 end
 
 function check_bns(bns::BayesNetSampler)
