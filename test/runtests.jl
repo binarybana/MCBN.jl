@@ -2,7 +2,10 @@ reload("SAMC")
 reload("MCBN")
 using Base.Test
 
-# write your own tests here
+##################################################
+# Setup
+##################################################
+
 bnd = MCBN.BayesNetDAI(5)
 bnd2 = MCBN.BayesNetDAI(5)
 bnd3 = MCBN.BayesNetDAI(5)
@@ -31,10 +34,10 @@ end
 test_net(bnd)
 test_kld(bnd, bnd2)
 
-MCBN.add_edge!(bnd3, 1,2)
+MCBN.add_edge!(bnd3, 1, 2)
 #MCBN.check_bnd(bnd3)
 
-MCBN.set_factor!(bnd3, 2, [1.0, 0.5, 0.0, 0.5])
+MCBN.set_factor!(bnd3, 2, [1.0, 0.5, 0.0, 0.5], false)
 MCBN.set_factor!(bnd3, 1, [0.8, 0.2])
 MCBN.check_bnd(bnd3)
 
@@ -78,9 +81,10 @@ end
     MCBN.check_bns(bns)
     E1 = MCBN.energy(bns)
     f1 = copy(bns.fvalue)
-    bns.changelist = [1:3]
+    bns.changelist = [1:3;]
     E2 = MCBN.energy(bns)
     f2 = copy(bns.fvalue)
+    MCBN.save!(bns)
     @test_approx_eq f1 f2
     @test_approx_eq E1 E2
 end
@@ -164,32 +168,59 @@ for i=1:1000
 end
 println("Passed 1000 check_bns points every 10 samples")
 
-    #empty = BayesNetCPD(np.array([2,2,2]))
-    #assert empty.entropy() == 3.0
-    #assert empty.naive_entropy() == 3.0
+# TODO: Test factor_klds
 
-    #connected = BayesNetCPD(np.array([2,2,2]))
-    #connected.adjust_factor(0,[1],[])
-    #connected.set_factor(0, [0.0,1.0,0.0,1.0])
-    #connected.adjust_factor(1,[2],[])
-    #connected.set_factor(1, [0.0,1.0,0.0,1.0])
+##################################################
+# Test zero factor marginalization
+##################################################
+bnd = MCBN.BayesNetDAI(3)
+MCBN.add_edge!(bnd, 1, 2)
+MCBN.add_edge!(bnd, 1, 3)
+DAI.clearBackups!(bnd)
+n = 0.2
+d = 0.1
+MCBN.set_factor!(bnd, 1, [0.0, 1.0])
+MCBN.set_factor!(bnd, 2, [1-n, d, n, 1-d])
+MCBN.set_factor!(bnd, 3, [1-n, d, n, 1-d])
+DAI.clearBackups!(bnd)
 
-    #assert connected.entropy() == 1.0
-    #assert connected.kld(empty) == 2.0
+allvars = DAI.VarSet(DAI.Var(1,2), DAI.Var(2,2))
+MCBN.setupIA!(bnd)
+jointfac = DAI.marginal(bnd.ia, allvars, true)
+margfac = DAI.marginal(bnd.ia, DAI.VarSet(DAI.Var(2,2)), true)
+belfac = DAI.belief(bnd.ia, DAI.VarSet(DAI.Var(2,2)))
 
-    ##np.random.seed(1234)
-    ##con = TreeNet(4)
-    ##rcon = TreeNet(4)
-    ##for i in range(1000):
-        ##kl1 = rcon.kld(con)
-        ##kl2 = con.kld(rcon)
-        ##assert (kl1 >= 0.0)
-        ##assert (kl2 >= 0.0)
-        ##rcon.propose!()
-        ##con.propose!()
+@test_approx_eq jointfac[1] 0.0
+@test_approx_eq jointfac[2] 0.1
+@test_approx_eq jointfac[3] 0.0
+@test_approx_eq jointfac[4] 0.9
 
-    #t = BayesNetCPD(np.ones(6,dtype=np.int32)*2)
-    #for i in range(500):
-        #t.mutate()
+##################################################
+# Test CoD from Zhao et al 2011
+##################################################
+bnd = MCBN.BayesNetDAI(3)
+MCBN.add_edge!(bnd, 1, 2)
+MCBN.add_edge!(bnd, 1, 3)
+DAI.clearBackups!(bnd)
+c10 = 0.4
+c11 = 1. - c10
+n13 = n12 = 0.2
+d12 = d13 = 0.1
+MCBN.set_factor!(bnd, 1, [c10, c11])
+MCBN.set_factor!(bnd, 2, [1-n12, d12, n12, 1-d12])
+MCBN.set_factor!(bnd, 3, [1-n13, d13, n13, 1-d13])
 
-    #return empty, connected, t
+MCBN.check_bnd(bnd)
+@test_approx_eq MCBN.cod(bnd, 1, [2,3]) 0.675
+@test_approx_eq MCBN.cod(bnd, 1, [2]) 0.65
+@test_approx_eq MCBN.cod(bnd, 2, [1]) 0.631578947368421
+
+##################################################
+# Test Controllability
+##################################################
+@test_approx_eq MCBN.controllability(bnd, [2], [1], 1) 0.42
+@test_approx_eq MCBN.controllability(bnd, [2], [2], 1) 0.28
+@test_approx_eq MCBN.controllability(bnd, [2], [2], 3) 0.0
+@test_approx_eq MCBN.controllability(bnd, [1], [2], 2) 0.0
+@test_approx_eq MCBN.controllability(bnd, [1,2], [2,2], 3)+1 1.0 # Not much accuracy here
+@test_approx_eq MCBN.controllability(bnd, [2,3], [2,2], 1) 0.308

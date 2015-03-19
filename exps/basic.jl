@@ -5,7 +5,7 @@ reload("MCBN")
 
 
 D = 8
-template = zeros(Bool,D,D)
+template = zeros(Int,D,D)
 cpds = MCBN.BayesNetDAI(D)
 
 function factor_klds(bnd1::MCBN.BayesNetDAI, bnd2::MCBN.BayesNetDAI)
@@ -34,7 +34,6 @@ function prior(bns::MCBN.BayesNetSampler)
         tot = 0
     end
 
-    # energy contribution from structural
     adj_diff = sum(abs(bns.mat[bns.x,bns.x] - template)) 
     e_struct = p_structural * adj_diff
 
@@ -48,7 +47,7 @@ preseed = rand(Uint)
 srand(123)
 #data = rand(1:2, D, 60)
 gold = MCBN.random_net(D) 
-data = MCBN.draw_data(gold,5)
+data = MCBN.draw_data(gold,10)
 srand(preseed)
 
 #bns = MCBN.BayesNetSampler(D, data, prior)
@@ -58,13 +57,18 @@ srand(preseed)
 #samc1.burn = 40_000
 #@time SAMC.sample(samc1, 8_00_000, beta=0.6)
 
+## MH
+# bn = MCBN.BayesNetSampler(D, data, prior)
+# mh = SAMC.MHRecord(bn, burn=burn, thin=thin)
+# samptime = @elapsed SAMC.sample!(mh, iters)
+
 ## PopSAMC
-bngen = x->MCBN.BayesNetSampler(D, data, prior)
-samc2 = SAMC.set_energy_limits(bngen, 10, refden_power=0.0)
-samc2.thin = 100
-samc2.stepscale = 10.0
-samc2.burn = 1_000
-@profile SAMC.sample(samc2, 10_000, beta=0.6)
+# bngen = x->MCBN.BayesNetSampler(D, data, prior)
+# samc2 = SAMC.set_energy_limits(bngen, 10, refden_power=0.0)
+# samc2.thin = 100
+# samc2.stepscale = 1_000.0
+# samc2.burn = 10_000
+cum_kld = Any[]
 
 function edge_prob(bns::MCBN.BayesNetSampler)
     ord = sortperm(bns.x)
@@ -75,3 +79,5 @@ kld_gold(bns::MCBN.BayesNetSampler) = MCBN.kld(gold, bns.bnd)
 
 post_edge = SAMC.posterior_e(edge_prob,samc2)
 post_kld = SAMC.posterior_e(kld_gold,samc2)
+
+

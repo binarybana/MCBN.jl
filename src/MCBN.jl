@@ -2,6 +2,7 @@ module MCBN
 
     import Base: show, length
     using DAI
+    import DAI: clearBackups!
     using Distributions
     using Graphs
     import Graphs: add_edge!
