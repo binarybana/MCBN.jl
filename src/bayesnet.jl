@@ -17,7 +17,71 @@ function BayesNetDAI(n::Int)
     BayesNetDAI(verts, fg, ia, true, -Inf)
 end
 
-function random_net(n::Int=5, weights=WeightVec([0.5,0.3,0.1]))
+function random_net_tree(n::Int=5, p=0.1)
+    net = BayesNetDAI(n)
+    if n==1
+        move_params!(net,1)
+        return net
+    end
+
+    for i=2:n
+      add_edge!(net, i, rand(1:i-1))
+    end
+    
+    for i=1:n
+      move_params!(net, i, false)
+    end
+    net
+end
+
+function random_net_cascade(n::Int=5, p=0.1)
+    net = BayesNetDAI(n)
+    if n==1
+        move_params!(net,1)
+        return net
+    end
+    hubs = 1 #rand(1:3)
+    n3 = fld(n,3)
+    tert1 = 1:n3
+    tert2 = n3+1:n3*2
+    tert3 = n3*2+1:n
+
+    for i=hubs+1:n3*2
+      add_edge!(net, rand(1:i-1), i, false)
+    end
+
+    for i=n3*2+1:n
+      if i<=n3*2+2 || rand() < p
+        add_edge!(net, i, rand(1:hubs), false)
+      else
+        add_edge!(net, i, rand(n3*2+1:i-1), false)
+      end
+    end
+
+    for i=1:n
+      move_params!(net,i, false)
+    end
+    net
+end
+
+function random_net_erdos(n::Int=5, p=0.2)
+        net = BayesNetDAI(n)
+        if n==1
+            move_params!(net,1)
+            return net
+        end
+        for i=1:n
+            for j=1:n
+              if i != j && rand() < p
+                add_edge!(net, j, i, false)
+              end
+            end
+            move_params!(net,i, false)
+        end
+    net
+end
+
+function random_net_weights(n::Int=5, weights=WeightVec([0.5,0.3,0.1]))
     count = -1
     cyclic = true
     local net
@@ -41,9 +105,6 @@ function random_net(n::Int=5, weights=WeightVec([0.5,0.3,0.1]))
         cyclic = test_cyclic_by_dfs(g)
         count += 1
     end
-    #if count > 0
-        #println("Generated $count cyclic graphs, restarting!")
-    #end
     net
 end
 
