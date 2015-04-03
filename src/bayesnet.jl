@@ -468,11 +468,13 @@ function check_bns(bns::BayesNetSampler)
 end
 
 function check_bnd(bnd::BayesNetDAI)
+    nedges = 0
     for i=1:numFactors(bnd.fg)
         v = bnd.verts[i]
         Base.Test.@test v in bnd.fg[i]
         arity = states(v)
         parvars = vars(bnd.fg[i]) - v
+        nedges += length(parvars) + 1
         numparstates = nrStates(parvars)
         for parstate=1:numparstates
             tot = 0.0
@@ -485,6 +487,7 @@ function check_bnd(bnd::BayesNetDAI)
             Base.Test.@test_approx_eq tot 1.0
         end
     end
+    Base.Test.@test nedges == numEdges(bnd.fg)
 end
 
 function controllability(bnd::BayesNetDAI, target_vars, target_states::Vector{Int}, control_var)
@@ -533,6 +536,34 @@ function controllability(bnd::BayesNetDAI, target_vars, target_states::Vector{In
   return max(ssd1,ssd2) - origssd
 end
 
+function ting_cod(bns::BayesNetSampler, target::Int, predictors::Vector{Int})
+  data = bns.data
+  # From Ting IEEE http://ieeexplore.ieee.org/stamp/stamp.jsp?arnumber=6190164
+  # Eq 11
+  N = size(data, 2)
+  N1 = sum(data[target, :]-1)
+  N0 = N - N1
+  k = length(predictors)
+
+  epsilon = 0.0
+  for i=1:2^k
+    states = digits(i-1, 2, k)
+    states += 1
+    U = V = 0
+    for rowind=1:N
+      if data[predictors, rowind] == states
+        U += 1-(data[target, rowind]-1)
+        V += data[target, rowind]-1
+      end
+    end
+    epsilon += min(U, V)
+  end
+  if min(epsilon, N0, N1) == 0
+    return 1
+  end
+  epsilon /= N
+  return 1 - epsilon/min(N0/N, N1/N)
+end
 
 function cod(bnd::BayesNetDAI, target::Int, predictors::Vector{Int})
   clearBackups!(bnd)
@@ -541,11 +572,11 @@ function cod(bnd::BayesNetDAI, target::Int, predictors::Vector{Int})
   targvs = VarSet(targv)
   predvs = VarSet(bnd.verts[predictors]...)
 
-  margfac = marginal(bnd.ia, targvs)
+  margfac = belief(bnd.ia, targvs)
   joint = marginal(bnd.ia, targvs+predvs)
 
-  normalize!(margfac)
-  normalize!(joint)
+  # normalize!(margfac)
+  # normalize!(joint)
 
   numparstates = nrStates(predvs)
   epsdot = 0.0
@@ -555,7 +586,29 @@ function cod(bnd::BayesNetDAI, target::Int, predictors::Vector{Int})
   end
   epszero = min(margfac[1], margfac[2])
 
-  return 1.0 - epsdot/epszero
+  # if epszero == epsdot == 0.0
+  #   return 0.0
+  if (1.0 - epsdot/epszero) == -Inf || epszero == 0.0 || epsdot == 0.0
+    println("#######################")
+    @show bnd.fg
+    @show joint
+    @show margfac
+    @show epsdot, epszero, 1.0 - epsdot/epszero
+    check_bnd(bnd)
+    @show numEdges(bnd.fg)
+    # bnd.ia = InfAlg(copy(bnd.fg), "BP[inference=SUMPROD,verbose=1,updates=SEQMAX,logdomain=0,tol=1e-9,maxiter=10000,damping=0.0]")
+    bnd.ia = InfAlg(copy(bnd.fg))
+    init!(bnd.ia)
+    run!(bnd.ia)
+    margfac = belief(bnd.ia, targvs)
+    joint = marginal(bnd.ia, targvs+predvs)
+    @show joint
+    @show margfac
+    error("")
+    return 0.0
+  else
+    return 1.0 - epsdot/epszero
+  end
 end
 
 function setupIA!(bnd::BayesNetDAI)
